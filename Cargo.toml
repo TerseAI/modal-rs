@@ -1,0 +1,45 @@
+[package]
+name = "modal-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91"
+description = "Unofficial Rust client for Modal Sandboxes, ported from Modal's Go SDK"
+license = "MIT"
+repository = "https://github.com/TerseAI/modal-rs"
+readme = "README.md"
+keywords = ["modal", "sandbox", "grpc", "containers"]
+categories = ["api-bindings", "asynchronous"]
+publish = false
+
+[lib]
+name = "modal"
+
+[dependencies]
+base64 = "0.22.1"
+bytes = "1"
+fastrand = "2"
+prost = "0.14"
+prost-types = "0.14"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+toml = "0.9"
+tonic = { version = "0.14", features = ["tls-aws-lc", "tls-webpki-roots"] }
+tonic-prost = "0.14"
+tracing = "0.1.44"
+uuid = { version = "1", features = ["v4"] }
+
+[build-dependencies]
+protoc-bin-vendored = "3"
+tonic-prost-build = "0.14"
+
+[dev-dependencies]
+anyhow = "1"
+futures-util = "0.3"
+# HTTP and WebSocket clients for examples/tunnels.rs.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "http2"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "test-util"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
