@@ -1,5 +1,5 @@
 [package]
-name = "modal-rs"
+name = "terse-modal"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.91"
@@ -9,7 +9,6 @@ repository = "https://github.com/TerseAI/modal-rs"
 readme = "README.md"
 keywords = ["modal", "sandbox", "grpc", "containers"]
 categories = ["api-bindings", "asynchronous"]
-publish = false
 
 [lib]
 name = "modal"

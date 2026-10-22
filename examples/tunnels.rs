@@ -208,7 +208,9 @@ async fn exercise(client: &Client, app_id: &str, group: &str, servers: &[Server]
     )
     .await
     .context("websocket connect timed out")??;
-    socket.send(Message::text("hello through the tunnel")).await?;
+    socket
+        .send(Message::text("hello through the tunnel"))
+        .await?;
     let echoed = tokio::time::timeout(Duration::from_secs(10), socket.next())
         .await
         .context("websocket echo timed out")?
@@ -242,7 +244,10 @@ async fn exercise(client: &Client, app_id: &str, group: &str, servers: &[Server]
     loop {
         let listed = list_group(client, app_id, group).await?;
         if !listed.contains(&server.sandbox_id) {
-            println!("terminated Sandbox dropped out of the list: {} left", listed.len());
+            println!(
+                "terminated Sandbox dropped out of the list: {} left",
+                listed.len()
+            );
             break;
         }
         if Instant::now() > deadline {

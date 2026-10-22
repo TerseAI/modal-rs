@@ -92,8 +92,7 @@ async fn run_to_exit(
         .await?;
     // Open the stream right away: Modal keeps only recent entrypoint output.
     let mut stdout = sandbox.stdout().await?;
-    let text =
-        tokio::time::timeout(Duration::from_secs(40), stdout.read_to_string()).await??;
+    let text = tokio::time::timeout(Duration::from_secs(40), stdout.read_to_string()).await??;
     let code = tokio::time::timeout(Duration::from_secs(40), sandbox.wait()).await??;
     ensure!(code == 0, "{command:?} exited {code}");
     Ok(text)

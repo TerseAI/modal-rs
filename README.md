@@ -1,4 +1,4 @@
-# modal-rs
+# terse-modal
 
 Unofficial Rust client for [Modal](https://modal.com) Sandboxes: a port of the sandbox part of Modal's Go SDK, using protos vendored from [modal-labs/modal-client](https://github.com/modal-labs/modal-client). Not affiliated with Modal Labs.
 
@@ -6,7 +6,7 @@ Unofficial Rust client for [Modal](https://modal.com) Sandboxes: a port of the s
 
 ```toml
 [dependencies]
-modal-rs = { git = "https://github.com/TerseAI/modal-rs" }
+terse-modal = "0.1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
