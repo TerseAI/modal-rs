@@ -46,9 +46,11 @@ async fn main() -> modal::Result<()> {
 
 Retries, auth token refresh and idempotency keys follow the Go SDK.
 
-**Not ported:** volumes, cloud bucket mounts, proxies, snapshots, the filesystem API, sidecars, tag updates, V1 entrypoint stdio. For anything missing, use the generated `modal::proto` types.
+**Not ported:** volumes, cloud bucket mounts, proxies, memory/full-filesystem snapshots, the filesystem API, sidecars, tag updates, V1 entrypoint stdio. For anything missing, use the generated `modal::proto` types.
 
 ## Good to know
+
+- `Sandbox::snapshot_directory(path, ttl)` creates an image from a directory; `mount_image(path, image)` mounts it in a running Sandbox. A `None` TTL retains the snapshot indefinitely. Clone and retain the Sandbox handle to reuse its authenticated command connection.
 
 - Modal keeps the image's `ENTRYPOINT` and passes `command` to it as arguments. Add `.dockerfile_commands(["ENTRYPOINT []"])` to run the command as given.
 - Tunnel URLs are public. Authenticate what you serve or set `inbound_cidr_allowlist`.

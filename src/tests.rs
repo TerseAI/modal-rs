@@ -51,6 +51,8 @@ struct Recorded {
     stdio_offsets: Vec<(i32, u64)>,
     stdin_writes: Vec<(u64, Vec<u8>, bool)>,
     terminated: bool,
+    snapshots: Vec<tcr::TaskSnapshotDirectoryRequest>,
+    mounts: Vec<tcr::TaskMountDirectoryRequest>,
 }
 
 /// Faults the fake injects.
@@ -379,6 +381,30 @@ impl modal_client_server::ModalClient for Fake {
 
 #[tonic::async_trait]
 impl task_command_router_server::TaskCommandRouter for Fake {
+    async fn task_snapshot_directory(
+        &self,
+        request: Request<tcr::TaskSnapshotDirectoryRequest>,
+    ) -> Result<Response<tcr::TaskSnapshotDirectoryResponse>, Status> {
+        self.record_router("task_snapshot_directory", &request)?;
+        self.state
+            .lock()
+            .unwrap()
+            .snapshots
+            .push(request.into_inner());
+        Ok(Response::new(tcr::TaskSnapshotDirectoryResponse {
+            image_id: "im-snapshot".into(),
+        }))
+    }
+
+    async fn task_mount_directory(
+        &self,
+        request: Request<tcr::TaskMountDirectoryRequest>,
+    ) -> Result<Response<()>, Status> {
+        self.record_router("task_mount_directory", &request)?;
+        self.state.lock().unwrap().mounts.push(request.into_inner());
+        Ok(Response::new(()))
+    }
+
     async fn task_exec_start(
         &self,
         request: Request<tcr::TaskExecStartRequest>,
@@ -759,4 +785,55 @@ async fn lists_sandboxes_across_pages() {
         "https://sb2-c.modal.host"
     );
     assert_eq!(fake.count("sandbox_list_v2"), 3);
+}
+
+#[tokio::test]
+async fn directory_snapshots_and_mounts_use_the_authenticated_router() {
+    let (client, fake) = start(Faults::all()).await;
+    let app = client
+        .app_from_name("test-app", AppLookupParams::default())
+        .await
+        .unwrap();
+    let sb = client
+        .create_sandbox(
+            &app,
+            &Image::from_id("im-base"),
+            SandboxCreateParams::default(),
+        )
+        .await
+        .unwrap();
+    assert!(sb.snapshot_directory("relative", None).await.is_err());
+    assert!(
+        sb.snapshot_directory("/customer", Some(Duration::ZERO))
+            .await
+            .is_err()
+    );
+    assert!(
+        sb.mount_image("/", &Image::from_id("im-code"))
+            .await
+            .is_err()
+    );
+    assert!(
+        sb.mount_image("/customer", &Image::from_registry("busybox"))
+            .await
+            .is_err()
+    );
+    let image = sb
+        .snapshot_directory("/customer", Some(Duration::from_secs(3600)))
+        .await
+        .unwrap();
+    sb.mount_image("/customer", &image).await.unwrap();
+    sb.snapshot_directory("/customer", None).await.unwrap();
+    let state = fake.state.lock().unwrap();
+    assert_eq!(state.snapshots.len(), 2);
+    assert_eq!(state.snapshots[0].path, b"/customer");
+    assert_eq!(state.snapshots[0].ttl_seconds, Some(3600));
+    assert_eq!(state.snapshots[1].ttl_seconds, Some(-1));
+    assert_ne!(
+        state.snapshots[0].snapshot_id,
+        state.snapshots[1].snapshot_id
+    );
+    assert!(uuid::Uuid::parse_str(&state.snapshots[0].snapshot_id).is_ok());
+    assert_eq!(state.mounts[0].image_id, "im-snapshot");
+    assert_eq!(state.mounts[0].path, b"/customer");
 }

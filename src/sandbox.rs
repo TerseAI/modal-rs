@@ -14,7 +14,7 @@ use crate::proto::client::{
     network_access::NetworkAccessType, probe::ProbeOneof, pty_info::PtyType,
 };
 use crate::proto::task_command_router::{self as tcr, TaskExecStderrConfig, TaskExecStdoutConfig};
-use crate::router::{Access, CommandRouter};
+use crate::router::{Access, CommandRouter, RetryOpts};
 use crate::secret::{self, Secret};
 
 /// How long a V1 create waits for capacity before giving up.
@@ -675,6 +675,62 @@ impl Sandbox {
         self.router().await?.wait_until_ready(timeout).await
     }
 
+    /// Snapshot an absolute directory. `None` retains the image indefinitely;
+    /// a positive TTL fixes its expiry at creation time.
+    pub async fn snapshot_directory(&self, path: &str, ttl: Option<Duration>) -> Result<Image> {
+        validate_directory(path, true)?;
+        let ttl_seconds = match ttl {
+            Some(ttl) if ttl.as_secs() > 0 => i64::try_from(ttl.as_secs())
+                .map_err(|_| Error::Invalid("snapshot TTL is too large".into()))?,
+            Some(_) => return Err(Error::Invalid("snapshot TTL must be positive".into())),
+            None => -1,
+        };
+        let router = self.router().await?;
+        let response = router
+            .call(
+                &RetryOpts {
+                    deadline: Some(Instant::now() + Duration::from_secs(55)),
+                    ..Default::default()
+                },
+                tcr::TaskSnapshotDirectoryRequest {
+                    task_id: router.task_id.clone(),
+                    path: path.as_bytes().to_vec(),
+                    snapshot_id: uuid::Uuid::new_v4().to_string(),
+                    ttl_seconds: Some(ttl_seconds),
+                    ..Default::default()
+                },
+                |mut stub, request| async move { stub.task_snapshot_directory(request).await },
+            )
+            .await?;
+        Ok(Image::from_id(response.image_id))
+    }
+
+    /// Mount a built image at an absolute non-root directory, reusing the
+    /// Sandbox's command connection. The image's files become visible there.
+    pub async fn mount_image(&self, path: &str, image: &Image) -> Result<()> {
+        validate_directory(path, false)?;
+        let image_id = image
+            .image_id()
+            .ok_or_else(|| Error::Invalid("mount requires a built image".into()))?;
+        let router = self.router().await?;
+        router
+            .call(
+                &RetryOpts {
+                    deadline: Some(Instant::now() + Duration::from_secs(55)),
+                    ..Default::default()
+                },
+                tcr::TaskMountDirectoryRequest {
+                    task_id: router.task_id.clone(),
+                    path: path.as_bytes().to_vec(),
+                    image_id: image_id.into(),
+                    ..Default::default()
+                },
+                |mut stub, request| async move { stub.task_mount_directory(request).await },
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn entrypoint_stream(&self, which: StdioStream) -> Result<OutputStream> {
         self.ensure_v2("entrypoint stdio")?;
         Ok(OutputStream::sandbox(self.router().await?, which))
@@ -1186,4 +1242,17 @@ mod tests {
         );
         assert_eq!(access.allowed_domains, vec!["*.example.com".to_string()]);
     }
+}
+
+fn validate_directory(path: &str, allow_root: bool) -> Result<()> {
+    if !path.starts_with('/')
+        || path.contains('\0')
+        || path.split('/').any(|p| p == ".." || p == ".")
+        || (!allow_root && path.trim_matches('/').is_empty())
+    {
+        return Err(Error::Invalid(
+            "directory must be an absolute normalized path (mounts cannot replace /)".into(),
+        ));
+    }
+    Ok(())
 }
